@@ -1,52 +1,91 @@
 'use strict';
+const _ = require('lodash');
+const BbPromise = require('bluebird');
 
-class ServerlessPlugin {
+class ServerlessWebsocketsPlugin {
   constructor(serverless, options) {
     this.serverless = serverless;
     this.options = options;
 
-    this.commands = {
-      welcome: {
-        usage: 'Helps you start your first Serverless plugin',
-        lifecycleEvents: [
-          'hello',
-          'world',
-        ],
-        options: {
-          message: {
-            usage:
-              'Specify the message you want to deploy '
-              + '(e.g. "--message \'My Message\'" or "-m \'My Message\'")',
-            required: true,
-            shortcut: 'm',
-          },
-        },
-      },
-    };
+    this.provider = this.serverless.getProvider('aws')
+
+    this.functions = {}
 
     this.hooks = {
-      'before:welcome:hello': this.beforeWelcome.bind(this),
-      'welcome:hello': this.welcomeUser.bind(this),
-      'welcome:world': this.displayHelloMessage.bind(this),
-      'after:welcome:world': this.afterHelloWorld.bind(this),
+      'after:deploy:deploy': this.registerWebsockets.bind(this),
+      'after:remove:remove': this.removeWebsockets.bind(this),
     };
   }
 
-  beforeWelcome() {
-    this.serverless.cli.log('Hello from Serverless!');
+  // Gathers the functions with `websocket` events.
+  prepareFunctions() {
+    Object.keys(this.serverless.service.functions).map(
+      (name) => {
+        const func = this.serverless.service.functions[name]
+        if (func.events && func.events.find((event) => event.websockets)) {
+          this.functions[name] = func
+        }
+      }
+    )
   }
 
-  welcomeUser() {
-    this.serverless.cli.log('Your message:');
+  registerWebsockets() {
+    this.prepareFunctions()
+
+    if (Object.keys(this.functions).length == 0) {
+      return BbPromise.resolve()
+    }
+
+    return this.getOrCreateWebsocketApi()
+      .then((params) => getOrCreateLambdaPermissions)
+      .then((params) => getOrCreateIntegration)
+      .then((params) => getOrCreateRoute)
+      .catch((err) => {
+        console.log(err)
+      })
   }
 
-  displayHelloMessage() {
-    this.serverless.cli.log(`${this.options.message}`);
+  // TODO
+  removeWebsockets() {}
+
+  getOrCreateWebsocketApi() {
+    const websocketApiName = this.getWebsocketApiName()
+
+    return this.provider.request('ApiGatewayV2', 'getApis', {})
+      .then((data) => {
+        const restApi = data.Items.find(api => api.name === websocketApiName)
+        if (restApi) {
+          return BbPromise.resolve(restApi)
+        }
+        const params = {
+          Name: websocketApiName,
+          ProtocolType: 'WEBSOCKET',
+          RouteSelectionExpression: this.getWebsocketApiRouteSelectionExpression()
+        }
+        return this.provider.request('ApiGatewayV2', 'createApi', params)
+      })
+      .catch((err) => {
+        throw new this.serverless.classes.Error(
+          `Could not create websocket API. Error: ${err.message}`
+        )
+      })
   }
 
-  afterHelloWorld() {
-    this.serverless.cli.log('Please come again!');
+  getWebsocketApiName() {
+    if (this.serverless.service.provider.websocketApiName &&
+        _.isString(this.serverless.service.provider.websocketApiName)) {
+      return `${this.serverless.service.provider.websocketApiName}`;
+    }
+    return `${this.provider.getStage()}-${this.serverless.service.service}`;
+  }
+
+  getWebsocketApiRouteSelectionExpression() {
+    if (this.serverless.service.provider.websocketApiRouteSelectionExpression&&
+        _.isString(this.serverless.service.provider.websocketApiRouteSelectionExpression)) {
+      return `${this.serverless.service.provider.websocketApiRouteSelectionExpression}`;
+    }
+    return `$request.body.action`
   }
 }
 
-module.exports = ServerlessPlugin;
+module.exports = ServerlessWebsocketsPlugin;
