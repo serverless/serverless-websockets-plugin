@@ -93,12 +93,13 @@ class ServerlessWebsocketsPlugin {
     const apis = await this.provider.request('ApiGatewayV2', 'getApis', {})
     // todo what if existing api is not valid websocket api? or non existent?
     const websocketApi = apis.Items.find((api) => api.Name === this.apiName)
-    return websocketApi ? websocketApi.ApiId : null
+    this.apiId = websocketApi ? websocketApi.ApiId : null
+    return this.apiId
   }
 
   async createApi() {
-    let apiId = await this.getApi()
-    if (!apiId) {
+    await this.getApi()
+    if (!this.apiId) {
       const params = {
         Name: this.apiName,
         ProtocolType: 'WEBSOCKET',
@@ -106,10 +107,9 @@ class ServerlessWebsocketsPlugin {
       }
 
       const res = await this.provider.request('ApiGatewayV2', 'createApi', params)
-      apiId = res.ApiId
+      this.apiId = res.ApiId
     }
-    this.apiId = apiId
-    return apiId
+    return this.apiId
   }
 
   async createIntegration(arn) {
@@ -161,7 +161,25 @@ class ServerlessWebsocketsPlugin {
     })
   }
 
+  async clearRoutes() {
+    const res = await this.provider.request('ApiGatewayV2', 'getRoutes', { ApiId: this.apiId })
+    return all(
+      map(
+        (route) =>
+          this.provider.request('ApiGatewayV2', 'deleteRoute', {
+            ApiId: this.apiId,
+            RouteId: route.RouteId
+          }),
+        res.Items
+      )
+    )
+  }
+
   async createRoutes() {
+    // We clear routes before deploying the new routes for idempotency
+    // since we lost the idempotency feature of CF
+    await this.clearRoutes()
+
     const integrationsPromises = map(async (fn) => {
       const integrationId = await this.createIntegration(fn.arn)
       await this.addPermission(fn.arn)
@@ -190,14 +208,15 @@ class ServerlessWebsocketsPlugin {
   }
 
   async removeWebsockets() {
-    const apiId = await this.getApi()
-
-    if (!apiId) {
+    await this.getApi()
+    if (!this.apiId) {
       return
     }
 
-    this.serverless.cli.log(`Removing Websockets API named "${this.apiName}" with ID "${apiId}"`)
-    return this.provider.request('ApiGatewayV2', 'deleteApi', { ApiId: apiId })
+    this.serverless.cli.log(
+      `Removing Websockets API named "${this.apiName}" with ID "${this.apiId}"`
+    )
+    return this.provider.request('ApiGatewayV2', 'deleteApi', { ApiId: this.apiId })
   }
 
   async displayWebsockets() {

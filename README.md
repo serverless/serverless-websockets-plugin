@@ -11,6 +11,7 @@ Load the `serverless-websockets-plugin`, then optionally provide a new API name 
 ```yml
 service: serverless-websockets-service
 
+# Load the plugin
 plugins:
   - serverless-websockets-plugin
 
