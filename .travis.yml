@@ -1,0 +1,29 @@
+language: node_js
+sudo: false
+node_js:
+- 10
+- 8
+- 6
+os:
+- linux
+- osx
+- windows
+before_install:
+- npm run setup:ci
+install:
+- npm run setup
+script:
+- npm run lint
+- npm run test:ci
+deploy:
+  provider: npm
+  email: services@serverless.com
+  skip_cleanup: true
+  on:
+    branch: master
+    tags: true
+    repo: serverless/serverless-websockets-plugin
+    node: 10
+    condition: "$TRAVIS_OS_NAME = linux"
+  api_key:
+    secure: rgISfI/XHgbb4UQFCrtQtq9dyNnLcOmF8zqGm2ZbRB8oQuPzlbmZS7nd+H74NCVaej7EQVvRyTYqtv7yiQVXG7BGgbWSmAsO8fSjWgITFcEPYFPpBJLAhcfFmHzcv5EsCNWErkY/qV4ZHALNKzdkrYH18sn7TTOxIMZ5METL4S9kEphuqLsfB/cKU26AIsHwwbh27QbjMOrKjvms19Ajrpv9BQRYo15CHdaWP8OZCMvFvtv4dveCJ0+i/EmAfgNhQwrE03x4oWF/9960tML4QzHvH7zTc4TGfLFwnScWGBPfmy8E5hrSWx96GOBWZRt+WsTiweKE8csZnFs6H4kpYVlR09mCAIKs/hcbfGPfwo8mUJMGsc5b60nWl4+QzACJKj/tZ8mBJvwrrNzHhfjGG3RYI+SOZ3v1/Qj7ydkcHe+Dtojw3Kr9dU0gLj9hbjnsxhVNVC4d9emXWwIC7ecMGNTsr3oI6t7HpcHuAY6SlzMRXI04KKN5GK5PH6Ec41jQnXIwZYitE1Bubt/NgdvbQkqDhyJ2MccDkgMJq0lwPrnY5HB8+yh6AFlvSE+URj9bt70Dw4zMOvYausgOA5AGY8MczH1NGa+L8bCDYhT4vm9hRmmg++ARUZNrhRPICCP39Ld6Ya7scpcusXpW0O3J2xeM0zUz8h4u6DwPW40mR6g=
