@@ -224,7 +224,7 @@ class ServerlessWebsocketsPlugin {
     if (isEmpty(this.functions)) {
       return
     }
-    this.apiId = await this.getApi()
+    await this.getApi()
     const baseUrl = this.getWebsocketUrl()
     const routes = flatten(map((fn) => fn.routes, this.functions))
     this.serverless.cli.consoleLog(chalk.yellow('WebSockets:'))

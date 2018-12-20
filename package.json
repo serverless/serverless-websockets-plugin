@@ -6,7 +6,7 @@
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "engines": {
-    "node": ">6.0"
+    "node": ">4.0"
   },
   "repository": {
     "type": "git",
