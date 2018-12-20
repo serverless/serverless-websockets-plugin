@@ -45,8 +45,15 @@ class ServerlessWebsocketsPlugin {
   }
 
   async deployWebsockets() {
-    this.serverless.cli.log(`Deploying Websockets API named "${this.apiName}"...`)
     await this.prepareFunctions()
+    if (
+      !is(Object, this.serverless.service.functions) ||
+      keys(this.serverless.service.functions).length === 0 ||
+      isEmpty(this.functions)
+    ) {
+      return
+    }
+    this.serverless.cli.log(`Deploying Websockets API named "${this.apiName}"...`)
     await this.createApi()
     await this.createRoutes()
     await this.createDeployment()
@@ -57,20 +64,13 @@ class ServerlessWebsocketsPlugin {
   }
 
   async prepareFunctions() {
-    if (
-      !is(Object, this.serverless.service.functions) ||
-      keys(this.serverless.service.functions).length === 0
-    ) {
-      return
-    }
-
     // get a list of CF outputs...
     const res = await this.provider.request('CloudFormation', 'describeStacks', {
       StackName: this.provider.naming.getStackName()
     })
     const outputs = res.Stacks[0].Outputs
 
-    keys(this.serverless.service.functions).map((name) => {
+    keys(this.serverless.service.functions || {}).map((name) => {
       const func = this.serverless.service.functions[name]
       if (func.events && func.events.find((event) => event.websocket)) {
         // find the arn of this function in the list of outputs...
