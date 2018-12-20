@@ -53,7 +53,7 @@ class ServerlessWebsocketsPlugin {
     this.serverless.cli.log(
       `Websockets API named "${this.apiName}" with ID "${this.apiId}" has been deployed.`
     )
-    this.serverless.cli.consoleLog(`  Websocket URL: ${this.getWebsocketUrl()}`)
+    this.serverless.cli.log(`  Websocket URL: ${this.getWebsocketUrl()}`)
   }
 
   async prepareFunctions() {
