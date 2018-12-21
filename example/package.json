@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD:example/package.json
   "name": "websocket-chat-example",
   "version": "1.0.0",
   "description": "",
@@ -9,66 +8,9 @@
     "sanitize-html": "^1.20.0"
   },
   "devDependencies": {},
-=======
-  "name": "serverless-websockets-plugin",
-  "version": "0.0.1",
-  "description": "Serverless WebSockets Plugin",
-  "author": "Serverless, Inc.",
-  "license": "Apache-2.0",
-  "main": "dist/index.js",
-  "engines": {
-    "node": ">4.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/serverless/serverless-websockets-plugin"
-  },
-  "bugs": {
-    "url": "https://github.com/serverless/serverless-websockets-plugin/issues"
-  },
-  "homepage": "https://github.com/serverless/serverless-websockets-plugin#readme",
->>>>>>> master:package.json
   "scripts": {
-    "build": "bash ./scripts/build.sh",
-    "clean": "bash ./scripts/clean.sh",
-    "cleanse": "bash ./scripts/cleanse.sh",
-    "lint": "bash ./scripts/lint.sh",
-    "lint:staged": "bash ./scripts/lint-staged.sh",
-    "setup": "bash ./scripts/setup.sh",
-    "setup:ci": "bash ./scripts/setup-ci.sh",
-    "test": "bash ./scripts/test.sh",
-    "test:ci": "bash ./scripts/test-ci.sh",
-    "watch": "bash ./scripts/watch.sh"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "dependencies": {
-    "@babel/polyfill": "^7.0.0",
-    "@serverless/utils": "0.0.20",
-    "chalk": "^2.4.1",
-    "source-map-support": "^0.5.5"
-  },
-  "devDependencies": {
-    "@babel/cli": "^7.1.5",
-    "@babel/core": "^7.1.6",
-    "@babel/node": "^7.0.0",
-    "@babel/plugin-proposal-object-rest-spread": "^7.0.0",
-    "@babel/preset-env": "^7.1.6",
-    "babel-core": "^7.0.0-bridge.0",
-    "babel-eslint": "^10.0.1",
-    "babel-jest": "^23.6.0",
-    "eslint": "^5.9.0",
-    "eslint-config-prettier": "^3.3.0",
-    "eslint-plugin-import": "^2.14.0",
-    "eslint-plugin-prettier": "^3.0.0",
-    "eslint-plugin-sort-imports-es6-autofix": "^0.3.0",
-    "jest": "^23.6.0",
-    "prettier": "^1.15.2"
-  },
-<<<<<<< HEAD:example/package.json
   "author": "",
   "license": "MIT"
-=======
-  "publishConfig": {
-    "access": "public"
-  }
->>>>>>> master:package.json
 }
