@@ -1,0 +1,84 @@
+lib-cov
+*.seed
+*.log
+*.csv
+*.dat
+*.out
+*.pid
+*.gz
+
+pids
+logs
+results
+
+# node js
+node_modules
+npm-debug.log
+
+# IntelliJ resources
+*.iml
+*.ipr
+*.iws
+.idea
+
+#mac
+.DS_Store
+
+# appveyor
+.appveyor.yml
+
+# babel
+.babelrc
+babel.config.js
+
+# codecov
+.codecov.yml
+
+# docker
+dbuild
+dexec
+docker-compose.yml
+Dockerfile
+
+# editorconfig
+.editorconfig
+
+# eslint
+.eslintcache
+.eslintignore
+.eslintrc.js
+
+# github
+.github
+.gitignore
+
+# jest
+.jest.init.js
+coverage
+jest.config.js
+__mocks__
+__snapshots__
+__tests__
+tests
+*.test.js
+
+# lintstaged
+.lintstagedrc.json
+
+# prettier
+.prettierignore
+prettier.config.js
+
+# travis
+.travis.yml
+
+
+# development
+CODE_OF_CONDUCT.md
+CONTRIBUTING.md
+DEVELOPMENT.md
+RELEASE.md
+docs
+examples
+scripts
+src

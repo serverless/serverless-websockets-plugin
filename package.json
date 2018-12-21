@@ -1,15 +1,4 @@
 {
-<<<<<<< HEAD:example/package.json
-  "name": "websocket-chat-example",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "dependencies": {
-    "aws-sdk": "^2.379.0",
-    "sanitize-html": "^1.20.0"
-  },
-  "devDependencies": {},
-=======
   "name": "serverless-websockets-plugin",
   "version": "0.0.1",
   "description": "Serverless WebSockets Plugin",
@@ -27,7 +16,6 @@
     "url": "https://github.com/serverless/serverless-websockets-plugin/issues"
   },
   "homepage": "https://github.com/serverless/serverless-websockets-plugin#readme",
->>>>>>> master:package.json
   "scripts": {
     "build": "bash ./scripts/build.sh",
     "clean": "bash ./scripts/clean.sh",
@@ -63,12 +51,7 @@
     "jest": "^23.6.0",
     "prettier": "^1.15.2"
   },
-<<<<<<< HEAD:example/package.json
-  "author": "",
-  "license": "MIT"
-=======
   "publishConfig": {
     "access": "public"
   }
->>>>>>> master:package.json
 }
