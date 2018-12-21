@@ -1,6 +1,6 @@
 {
   "name": "serverless-websockets-plugin",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Serverless WebSockets Plugin",
   "author": "Serverless, Inc.",
   "license": "Apache-2.0",
