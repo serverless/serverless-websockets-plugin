@@ -29,29 +29,15 @@ async function connectionManager(event, context) {
     return success;
   } else if (event.requestContext.eventType === "DISCONNECT") {
     // unsub all channels connection was in
-    const subscriptions = await db.Client.query({
-      TableName: db.Table,
-      IndexName: db.Connection.Channels.Index,
-      KeyConditionExpression: `${
-        db.Connection.Channels.Key
-      } = :connectionId and begins_with(${
-        db.Connection.Channels.Range
-      }, :channelEntity)`,
-      ExpressionAttributeValues: {
-        ":connectionId": `${db.Connection.Prefix}${
-          event.requestContext.connectionId
-        }`,
-        ":channelEntity": db.Channel.Prefix
-      }
-    }).promise();
-
-    const unsubscribes = subscriptions.Items.map(async subscription =>
+    const subscriptions =await db.fetchConnectionSubscriptions(event);
+    const unsubscribes = subscriptions.map(async subscription =>
+      // just simulate / reuse the same as if they issued the request via the protocol
       unsubscribeChannel(
         {
           ...event,
           body: JSON.stringify({
             action: "unsubscribe",
-            channelId: subscription[db.Channel.Primary.Key].split("|")[1]
+            channelId: db.parseEntityId(subscription[db.Channel.Primary.Key])
           })
         },
         context
@@ -60,7 +46,6 @@ async function connectionManager(event, context) {
 
     await Promise.all(unsubscribes);
     return success;
-    // no need to return anything because this is a disconnection
   }
 }
 
@@ -80,71 +65,42 @@ async function sendMessage(event, context) {
 
   const body = JSON.parse(event.body);
   const messageId = `${db.Message.Prefix}${Date.now()}`;
+  const name = body.name
+    .replace(/[^a-z0-9\s-]/gi, "")
+    .trim()
+    .replace(/\+s/g, "-");
   const content = sanitize(body.content, {
-    allowedTags: [
-      "ul",
-      "ol",
-      "b",
-      "i",
-      "em",
-      "strike",
-      "pre",
-      "strong",
-      "li"
-    ],
+    allowedTags: ["ul", "ol", "b", "i", "em", "strike", "pre", "strong", "li"],
     allowedAttributes: {}
   });
 
+  // save message in database for later
   const item = await db.Client.put({
     TableName: db.Table,
     Item: {
       [db.Message.Primary.Key]: `${db.Channel.Prefix}${body.channelId}`,
       [db.Message.Primary.Range]: messageId,
       ConnectionId: `${event.requestContext.connectionId}`,
-      Name: `${body.name
-        .replace(/[^a-z0-9\s-]/gi, "")
-        .trim()
-        .replace(/\+s/g, "-")}`,
+      Name: name,
       Content: content
     }
   }).promise();
 
-  const subscribers = await fetchConnectionsInChannel(body.channelId);
+  const subscribers = await db.fetchChannelSubscriptions(body.channelId);
   const results = subscribers.map(async subscriber => {
-    const subscriberId = subscriber[
-      db.Channel.Connections.Range
-    ].split("|")[1];
-    return wsClient.send(
-      subscriberId, // really backwards way of getting connection id
-      {
-        event: "channel_message",
-        channelId: body.channelId,
-        name: body.name,
-        content
-      }
+    const subscriberId = db.parseEntityId(
+      subscriber[db.Channel.Connections.Range]
     );
+    return wsClient.send(subscriberId, {
+      event: "channel_message",
+      channelId: body.channelId,
+      name,
+      content
+    });
   });
 
   await Promise.all(results);
-
   return success;
-}
-
-async function fetchConnectionsInChannel(channelId) {
-  const results = await db.Client.query({
-    TableName: db.Table,
-    KeyConditionExpression: `${
-      db.Channel.Connections.Key
-    } = :channelId and begins_with(${
-      db.Channel.Connections.Range
-    }, :connectionEntity)`,
-    ExpressionAttributeValues: {
-      ":channelId": `${db.Channel.Prefix}${channelId}`,
-      ":connectionEntity": db.Connection.Prefix
-    }
-  }).promise();
-
-  return results.Items;
 }
 
 // oh my... this got out of hand refactor for sanity
@@ -155,39 +111,46 @@ async function broadcast(event, context) {
   // broadcast the news
   const results = event.Records.map(async record => {
     switch (record.dynamodb.Keys[db.Primary.Key].S.split("|")[0]) {
-      // Connection base entity
-      case db.Connection.Prefix.slice(0, -1):
+      // Connection entities
+      case db.Connection.Entity:
         break;
-      // Channel base entity (most stuff)
-      case db.Channel.Prefix.slice(0, -1):
+
+      // Channel entities (most stuff)
+      case db.Channel.Entity:
         // figure out what to do based on full entity model
 
+        // get secondary ENTITY| type by splitting on | and looking at first part
         switch (record.dynamodb.Keys[db.Primary.Range].S.split("|")[0]) {
-          case db.Connection.Prefix.slice(0, -1): {
-
-            let eventType = 'sub';
-            if(record.eventName === 'REMOVE'){
-              eventType = 'unsub';
-            } else if (record.eventName === 'UPDATE'){
-              return success;
+          // if we are a CONNECTION
+          case db.Connection.Entity: {
+            let eventType = "sub";
+            if (record.eventName === "REMOVE") {
+              eventType = "unsub";
+            } else if (record.eventName === "UPDATE") {
+              // currently not possible, and not handled
+              break;
             }
 
             // A connection event on the channel
             // let all users know a connection was created or dropped
-            const channelId = record.dynamodb.Keys[db.Primary.Key].S.split("|")[1];
-            const subscribers = await fetchConnectionsInChannel(channelId);
+            const channelId = db.parseEntityId(
+              record.dynamodb.Keys[db.Primary.Key].S
+            );
+            const subscribers = await db.fetchChannelSubscriptions(channelId);
             const results = subscribers.map(async subscriber => {
-              const subscriberId = subscriber[
-                db.Channel.Connections.Range
-              ].split("|")[1];
+              const subscriberId = db.parseEntityId(
+                subscriber[db.Channel.Connections.Range]
+              );
               return wsClient.send(
                 subscriberId, // really backwards way of getting connection id
                 {
                   event: `subscriber_${eventType}`,
                   channelId,
-                  subscriberId: record.dynamodb.Keys[db.Primary.Range].S.split(
-                    "|"
-                  )[1]
+
+                  // sender of message "from id"
+                  subscriberId: db.parseEntityId(
+                    record.dynamodb.Keys[db.Primary.Range].S
+                  )
                 }
               );
             });
@@ -196,20 +159,25 @@ async function broadcast(event, context) {
             break;
           }
 
-          case db.Message.Prefix.slice(0, -1): {
-            if(record.eventName !== 'INSERT'){
+          // If we are a MESSAGE
+          case db.Message.Entity: {
+            if (record.eventName !== "INSERT") {
               return success;
             }
 
+            // We could do interesting things like see if this was a bot
+            // or other system directly adding messages to the dynamodb table
+            // then send them out, otherwise assume it was already blasted out on the sockets
+            // and no need to send it again!
             break;
           }
           default:
-            return;
+            break;
         }
 
         break;
       default:
-        return;
+        break;
     }
   });
 
@@ -225,9 +193,9 @@ async function broadcast(event, context) {
 //   }).promise();
 // };
 
-async function channelManager(event, context){
+async function channelManager(event, context) {
   const action = JSON.parse(event.body).action;
-  switch(action){
+  switch (action) {
     case "subscribeChannel":
       await subscribeChannel(event, context);
       break;
@@ -248,7 +216,7 @@ async function subscribeChannel(event, context) {
     Item: {
       [db.Channel.Connections.Key]: `${db.Channel.Prefix}${channelId}`,
       [db.Channel.Connections.Range]: `${db.Connection.Prefix}${
-        event.requestContext.connectionId
+        db.parseEntityId(event)
       }`
     }
   }).promise();
@@ -267,7 +235,7 @@ async function unsubscribeChannel(event, context) {
     Key: {
       [db.Channel.Connections.Key]: `${db.Channel.Prefix}${channelId}`,
       [db.Channel.Connections.Range]: `${db.Connection.Prefix}${
-        event.requestContext.connectionId
+        db.parseEntityId(event)
       }`
     }
   }).promise();

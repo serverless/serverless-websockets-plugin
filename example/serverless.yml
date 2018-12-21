@@ -71,7 +71,7 @@ functions:
 
   # Channel Subscriptions
   channelManager:
-    handler: src/handler.channelSubscriptions
+    handler: src/handler.channelManager
     events:
       - websocket:
           routeKey: subscribeChannel

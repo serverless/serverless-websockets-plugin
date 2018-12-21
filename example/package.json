@@ -5,8 +5,7 @@
   "main": "index.js",
   "dependencies": {
     "aws-sdk": "^2.379.0",
-    "sanitize-html": "^1.20.0",
-    "serverless-websockets-plugin": "git+https://github.com/serverless/serverless-websockets-plugin.git#master"
+    "sanitize-html": "^1.20.0"
   },
   "devDependencies": {},
   "scripts": {
