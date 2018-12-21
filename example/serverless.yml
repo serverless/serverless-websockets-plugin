@@ -7,7 +7,6 @@ provider:
   stackName: ${self:service}-${self:provider.stage}
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -29,6 +28,9 @@ provider:
             - '/'
             - - Fn::GetAtt: [ApplicationDynamoDBTable, Arn]
               - '*'
+  environment:
+    APPLICATION_TABLE:
+      Ref: ApplicationDynamoDBTable
 
   # optional
   websocketApiName: websocket-chat-${self:provider.stage}
@@ -38,39 +40,47 @@ provider:
   # from the websocket event types on your function
   websocketApiRouteSelectionExpression: $request.body.action
 
-  environment:
-    APPLICATION_TABLE:
-      Ref: ApplicationDynamoDBTable
-    STAGE: ${self:provider.stage}
-    # could get around this by storing config in DDB table? eww but it works
-    DOMAIN_NAME: drrj5zji6c.execute-api.us-east-1.amazonaws.com
-
 
 plugins:
-  # After first deploy uncomment the line below
-  # - serverless-finch
-
-custom:
-  # Static website
-  # After first deploy uncomment the 2 lines below
-  client:
-    bucketName: ${cf:${self:provider.stackName}.ClientBucketName}
+  - serverless-websockets-plugin
 
 functions:
   # manage connection and disconnection of clients
   connectionManager:
     handler: src/handler.connectionManager
+    events:
+      - websocket:
+          routeKey: $connect
+      - websocket:
+          routeKey: $disconnect
 
   # just in case we are getting weird / bad data
   # we can react to it with a sane resposne
   defaultMessages:
     handler: src/handler.defaultMessage
+    events:
+      - websocket:
+          routeKey: $default
 
   # handle chat app messages
-  chatMessages:
-    handler: src/handler.chatMessage
+  sendMessage:
+    handler: src/handler.sendMessage
+    events:
+      - websocket:
+          routeKey: sendMessage
+
+  # Channel Subscriptions
+  channelManager:
+    handler: src/handler.channelSubscriptions
+    events:
+      - websocket:
+          routeKey: subscribeChannel
+      - websocket:
+          routeKey: unsubscribeChannel
 
   # handle broadcasting all events
+  # we do this by listening the dynamodb table stream so messages or disconnects
+  # could even be done by sub-systems directly to dynamodb
   broadcast:
     handler: src/handler.broadcast
     events:
@@ -81,9 +91,6 @@ functions:
 
 resources:
   Resources:
-    ClientBucket:
-      Type: AWS::S3::Bucket
-
     # DynamoDB best practices suggest most applications should only
     # have a single table. For resources check out the follow links...
     # https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html
@@ -114,7 +121,3 @@ resources:
             Projection:
                 ProjectionType: ALL
 
-  Outputs:
-    ClientBucketName:
-      Value:
-        Ref: ClientBucket

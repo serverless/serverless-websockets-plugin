@@ -1,18 +1,17 @@
 const db = require("./db");
 const ws = require("./websocket-client");
 const sanitize = require("sanitize-html");
-const wsClient = new ws.Client({
-  requestContext: {
-    domainName: process.env.DOMAIN_NAME,
-    stage: process.env.STAGE
-  }
-});
+
+const wsClient = new ws.Client();
+
 const success = {
   statusCode: 200
 };
 
 async function connectionManager(event, context) {
-  console.log(JSON.stringify(event), JSON.stringify(context));
+  // we do this so first connect EVER sets up some needed config state in db
+  // this goes away after CF support for web sockets
+  await wsClient._setupClient(event);
 
   if (event.requestContext.eventType === "CONNECT") {
     // sub general channel
@@ -24,13 +23,12 @@ async function connectionManager(event, context) {
           channelId: "General"
         })
       },
-      context,
-      false
+      context
     );
 
     return success;
   } else if (event.requestContext.eventType === "DISCONNECT") {
-    // unsub all channels we were in
+    // unsub all channels connection was in
     const subscriptions = await db.Client.query({
       TableName: db.Table,
       IndexName: db.Connection.Channels.Index,
@@ -47,15 +45,13 @@ async function connectionManager(event, context) {
       }
     }).promise();
 
-    console.log(subscriptions)
-
     const unsubscribes = subscriptions.Items.map(async subscription =>
       unsubscribeChannel(
         {
           ...event,
           body: JSON.stringify({
             action: "unsubscribe",
-            channelId: subscription[db.Channel.Primary.Key].split('|')[1]
+            channelId: subscription[db.Channel.Primary.Key].split("|")[1]
           })
         },
         context
@@ -69,8 +65,6 @@ async function connectionManager(event, context) {
 }
 
 async function defaultMessage(event, context) {
-  console.log(JSON.stringify(event), JSON.stringify(context));
-
   await wsClient.send(event, {
     event: "error",
     message: "invalid action type"
@@ -81,41 +75,59 @@ async function defaultMessage(event, context) {
 
 async function sendMessage(event, context) {
   // save message for future history
-  // saving with `hrtime` allows sorting and easy
-  // ttl?
-  console.log(JSON.stringify(event), JSON.stringify(context));
+  // saving with timestamp allows sorting
+  // maybe do ttl?
+
+  const body = JSON.parse(event.body);
+  const messageId = `${db.Message.Prefix}${Date.now()}`;
+  const content = sanitize(body.content, {
+    allowedTags: [
+      "ul",
+      "ol",
+      "b",
+      "i",
+      "em",
+      "strike",
+      "pre",
+      "strong",
+      "li"
+    ],
+    allowedAttributes: {}
+  });
 
   const item = await db.Client.put({
     TableName: db.Table,
     Item: {
-      [db.Message.Primary.Key]: `${db.Channel.Prefix}${event.ChannelId}`,
-      [db.Message.Primary.Range]: `${db.Message.Prefix}${process.hrtime()}`,
-      ConnectionId: `${context.connection.id}`,
-      Name: `${event.body.name
+      [db.Message.Primary.Key]: `${db.Channel.Prefix}${body.channelId}`,
+      [db.Message.Primary.Range]: messageId,
+      ConnectionId: `${event.requestContext.connectionId}`,
+      Name: `${body.name
         .replace(/[^a-z0-9\s-]/gi, "")
         .trim()
         .replace(/\+s/g, "-")}`,
-      Content: sanitize(event.body.content, {
-        allowedTags: [
-          "ul",
-          "ol",
-          "b",
-          "i",
-          "em",
-          "strike",
-          "pre",
-          "strong",
-          "li"
-        ],
-        allowedAttributes: {}
-      })
+      Content: content
     }
   }).promise();
 
+  const subscribers = await fetchConnectionsInChannel(body.channelId);
+  const results = subscribers.map(async subscriber => {
+    const subscriberId = subscriber[
+      db.Channel.Connections.Range
+    ].split("|")[1];
+    return wsClient.send(
+      subscriberId, // really backwards way of getting connection id
+      {
+        event: "channel_message",
+        channelId: body.channelId,
+        name: body.name,
+        content
+      }
+    );
+  });
+
+  await Promise.all(results);
+
   return success;
-  // Instead of broadcasting here we listen to the dynamodb stream
-  // This means we can acknowledge the save fast
-  // then blast it out later async from the stream
 }
 
 async function fetchConnectionsInChannel(channelId) {
@@ -142,7 +154,6 @@ async function broadcast(event, context) {
   // get all connections for channel of interest
   // broadcast the news
   const results = event.Records.map(async record => {
-    console.log(JSON.stringify(record));
     switch (record.dynamodb.Keys[db.Primary.Key].S.split("|")[0]) {
       // Connection base entity
       case db.Connection.Prefix.slice(0, -1):
@@ -152,12 +163,19 @@ async function broadcast(event, context) {
         // figure out what to do based on full entity model
 
         switch (record.dynamodb.Keys[db.Primary.Range].S.split("|")[0]) {
-          case db.Connection.Prefix.slice(0, -1):
+          case db.Connection.Prefix.slice(0, -1): {
+
+            let eventType = 'sub';
+            if(record.eventName === 'REMOVE'){
+              eventType = 'unsub';
+            } else if (record.eventName === 'UPDATE'){
+              return success;
+            }
+
             // A connection event on the channel
             // let all users know a connection was created or dropped
-            const subscribers = await fetchConnectionsInChannel(
-              record.dynamodb.Keys[db.Primary.Key].S.split("|")[1]
-            );
+            const channelId = record.dynamodb.Keys[db.Primary.Key].S.split("|")[1];
+            const subscribers = await fetchConnectionsInChannel(channelId);
             const results = subscribers.map(async subscriber => {
               const subscriberId = subscriber[
                 db.Channel.Connections.Range
@@ -165,7 +183,8 @@ async function broadcast(event, context) {
               return wsClient.send(
                 subscriberId, // really backwards way of getting connection id
                 {
-                  event: "subscriber_sub_unsub",
+                  event: `subscriber_${eventType}`,
+                  channelId,
                   subscriberId: record.dynamodb.Keys[db.Primary.Range].S.split(
                     "|"
                   )[1]
@@ -175,12 +194,15 @@ async function broadcast(event, context) {
 
             await Promise.all(results);
             break;
+          }
 
-          case db.Message.Prefix.slice(0, -1):
-            // A message event on the channel
+          case db.Message.Prefix.slice(0, -1): {
+            if(record.eventName !== 'INSERT'){
+              return success;
+            }
 
             break;
-
+          }
           default:
             return;
         }
@@ -203,9 +225,23 @@ async function broadcast(event, context) {
 //   }).promise();
 // };
 
-async function subscribeChannel(event, context) {
-  console.log(JSON.stringify(event), JSON.stringify(context));
+async function channelManager(event, context){
+  const action = JSON.parse(event.body).action;
+  switch(action){
+    case "subscribeChannel":
+      await subscribeChannel(event, context);
+      break;
+    case "unsubscribeChannel":
+      await unsubscribeChannel(event, context);
+      break;
+    default:
+      break;
+  }
 
+  return success;
+}
+
+async function subscribeChannel(event, context) {
   const channelId = JSON.parse(event.body).channelId;
   await db.Client.put({
     TableName: db.Table,
@@ -217,11 +253,14 @@ async function subscribeChannel(event, context) {
     }
   }).promise();
 
+  // Instead of broadcasting here we listen to the dynamodb stream
+  // just a fun example of flexible usage
+  // you could imagine bots or other sub systems broadcasting via a write the db
+  // and then streams does the rest
   return success;
 }
 
 async function unsubscribeChannel(event, context) {
-  console.log(JSON.stringify(event), JSON.stringify(context));
   const channelId = JSON.parse(event.body).channelId;
   const item = await db.Client.delete({
     TableName: db.Table,
@@ -232,7 +271,6 @@ async function unsubscribeChannel(event, context) {
       }`
     }
   }).promise();
-
   return success;
 }
 
@@ -242,5 +280,6 @@ module.exports = {
   sendMessage,
   broadcast,
   subscribeChannel,
-  unsubscribeChannel
+  unsubscribeChannel,
+  channelManager
 };
