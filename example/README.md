@@ -11,7 +11,7 @@
 
 ### Connect
 
-`wscat -c wscat -c wss://{ApiId}.execute-api.us-east-1.amazonaws.com/{ApiStage}`
+`wscat -c wss://{ApiId}.execute-api.us-east-1.amazonaws.com/{ApiStage}`
 
 ### Messages
 
