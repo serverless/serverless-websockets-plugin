@@ -9,8 +9,6 @@ class ServerlessWebsocketsPlugin {
 
     this.stage = this.provider.getStage()
     this.region = this.provider.getRegion()
-    this.apiName = this.getWebsocketApiName()
-    this.routeSelectionExpression = this.getWebsocketApiRouteSelectionExpression()
     this.functions = [] // to be filled later...
 
     this.hooks = {
@@ -44,7 +42,13 @@ class ServerlessWebsocketsPlugin {
     return `wss://${this.apiId}.execute-api.${this.region}.amazonaws.com/${this.stage}/`
   }
 
+  init() {
+    this.apiName = this.getWebsocketApiName()
+    this.routeSelectionExpression = this.getWebsocketApiRouteSelectionExpression()
+  }
+
   async deployWebsockets() {
+    this.init()
     await this.prepareFunctions()
     if (
       !is(Object, this.serverless.service.functions) ||
@@ -208,6 +212,7 @@ class ServerlessWebsocketsPlugin {
   }
 
   async removeWebsockets() {
+    this.init()
     await this.getApi()
     if (!this.apiId) {
       return
@@ -220,6 +225,7 @@ class ServerlessWebsocketsPlugin {
   }
 
   async displayWebsockets() {
+    this.init()
     await this.prepareFunctions()
     if (isEmpty(this.functions)) {
       return
