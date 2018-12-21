@@ -7,8 +7,6 @@ class ServerlessWebsocketsPlugin {
     this.options = options
     this.provider = this.serverless.getProvider('aws')
 
-    this.stage = this.provider.getStage()
-    this.region = this.provider.getRegion()
     this.functions = [] // to be filled later...
 
     this.hooks = {
@@ -45,6 +43,8 @@ class ServerlessWebsocketsPlugin {
   init() {
     this.apiName = this.getWebsocketApiName()
     this.routeSelectionExpression = this.getWebsocketApiRouteSelectionExpression()
+    this.stage = this.provider.getStage()
+    this.region = this.provider.getRegion()
   }
 
   async deployWebsockets() {
