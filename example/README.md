@@ -11,6 +11,8 @@
 
 ### Connect
 
+`npm i -g wscat` - to install WebSocket cat
+
 `wscat -c wss://{ApiId}.execute-api.us-east-1.amazonaws.com/{ApiStage}`
 
 ### Messages
