@@ -26,6 +26,11 @@ class Client {
         }
 
         if(!this.client){
+            
+            if(config.requestContext.apiId){
+                config.requestContext.domainName  = `${config.requestContext.apiId}.execute-api.${process.env.API_REGION}.amazonaws.com`
+            }
+          
             this.client = new AWS.ApiGatewayManagementApi({
                 apiVersion: "2018-11-29",
                 endpoint: `https://${config.requestContext.domainName}/${config.requestContext.stage}`
