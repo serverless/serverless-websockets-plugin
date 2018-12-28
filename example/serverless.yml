@@ -80,7 +80,7 @@ functions:
           routeKey: unsubscribeChannel
 
   # handle broadcasting all events
-  # we do this by listening the dynamodb table stream so messages or disconnects
+  # we do this by listening the dynamodb table stream for messages or disconnects
   # could even be done by sub-systems directly to dynamodb
   broadcast:
     handler: src/handler.broadcast
