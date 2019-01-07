@@ -6,6 +6,8 @@ Install the plugin by adding it to your service dependencies:
 npm i serverless-websockets-plugin --save
 ```
 
+**Note:** Because this plugin uses the new `ApiGatewayV2` service in the AWS SDK, it requires v1.35.0+ of the Serverless Framework.
+
 ## 2. Usage
 Load the `serverless-websockets-plugin`, then optionally provide a new API name and Route Selection Expression, and finally define your WebSockets events and their route keys:
 ```yml
