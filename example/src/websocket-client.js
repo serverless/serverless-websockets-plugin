@@ -70,6 +70,27 @@ class Client {
             Data: JSON.stringify(payload)
         }).promise().catch(err => {
             console.log(JSON.stringify(err))
+          
+            if (err.statusCode === 410) {
+                // unsub all channels connection was in
+                const subscriptions = await db.fetchConnectionSubscriptions(ConnectionId);
+
+                console.log(`[wsClient][send][postToConnection] Found stale connection, deleting ${ConnectionId}:`);
+                console.log('[wsClient][send][postToConnection] Unsubscribe from channels:');
+                console.log(JSON.stringify(subscriptions, null, 2));
+
+                const unsubscribes = subscriptions.map(async subscription =>
+                    db.Client.delete({
+                        TableName: db.Table,
+                        Key: {
+                            [db.Channel.Connections.Key]: `${db.Channel.Prefix}${db.parseEntityId(subscription[db.Channel.Primary.Key])}`,
+                            [db.Channel.Connections.Range]: `${db.Connection.Prefix}${ConnectionId}`
+                        }
+                    }).promise()
+                );
+
+                await Promise.all(unsubscribes);
+            }
         });
 
         return true;
