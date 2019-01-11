@@ -43,4 +43,12 @@ functions:
     events:
       - websocket:
           routeKey: message
+  twoWayMessage:
+    handler: handler.twoWay
+    events:
+      - websocket:
+          routeKey: twoway
+          # The property below will enable an integration response in the API Gateway.
+          # See https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api-route-response.html
+          routeResponseSelectionExpression: $default
 ```
