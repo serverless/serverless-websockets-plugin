@@ -82,7 +82,7 @@ class ServerlessWebsocketsPlugin {
         const arn = outputs.find((output) => output.OutputKey === outputKey).OutputValue
 
         // get list of route keys configured for this function
-        const routes = map((e) => e.websocket.routeKey, filter((e) => e.websocket, func.events))
+        const routes = map((e) => e.websocket, filter((e) => e.websocket && e.websocket.routeKey, func.events))
 
         const fn = {
           arn: arn,
@@ -151,18 +151,37 @@ class ServerlessWebsocketsPlugin {
     })
   }
 
+  async createRouteResponse(routeId, routeResponseKey) {
+    const params = {
+      ApiId: this.apiId,
+      RouteId: routeId,
+      RouteResponseKey: routeResponseKey
+    }
+
+    return await this.provider.request('ApiGatewayV2', 'createRouteResponse', params)
+  }
+
   async createRoute(integrationId, route) {
     const params = {
       ApiId: this.apiId,
-      RouteKey: route,
+      RouteKey: route.routeKey,
       Target: `integrations/${integrationId}`
     }
+    if (route.routeResponseSelectionExpression) {
+      params.RouteResponseSelectionExpression = route.routeResponseSelectionExpression;
+    }
 
-    return this.provider.request('ApiGatewayV2', 'createRoute', params).catch((e) => {
+    const res = await this.provider.request('ApiGatewayV2', 'createRoute', params).catch((e) => {
       if (e.providerError.code !== 'ConflictException') {
         throw e
       }
     })
+
+    if (route.routeResponseSelectionExpression) {
+      await this.createRouteResponse(res.RouteId, '$default')
+    }
+
+    return res
   }
 
   async clearRoutes() {
@@ -232,7 +251,7 @@ class ServerlessWebsocketsPlugin {
     }
     await this.getApi()
     const baseUrl = this.getWebsocketUrl()
-    const routes = flatten(map((fn) => fn.routes, this.functions))
+    const routes = flatten(map((fn) => fn.routes.routeKey, this.functions))
     this.serverless.cli.consoleLog(chalk.yellow('WebSockets:'))
     this.serverless.cli.consoleLog(`  ${chalk.yellow('Base URL:')} ${baseUrl}`)
     this.serverless.cli.consoleLog(chalk.yellow('  Routes:'))
