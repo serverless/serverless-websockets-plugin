@@ -68,7 +68,7 @@ class Client {
         await this.client.postToConnection({
             ConnectionId,
             Data: JSON.stringify(payload)
-        }).promise().catch(err => {
+        }).promise().catch(async err => {
             console.log(JSON.stringify(err))
           
             if (err.statusCode === 410) {
