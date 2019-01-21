@@ -7,6 +7,7 @@ class ServerlessWebsocketsPlugin {
     this.options = options
     this.provider = this.serverless.getProvider('aws')
 
+    this.authorizers = {} // to be filled later...
     this.functions = [] // to be filled later...
 
     this.hooks = {
@@ -59,6 +60,11 @@ class ServerlessWebsocketsPlugin {
     }
     this.serverless.cli.log(`Deploying Websockets API named "${this.apiName}"...`)
     await this.createApi()
+    // We clear routes before deploying the new routes for idempotency
+    // since we lost the idempotency feature of CF
+    await this.clearRoutes()
+    await this.clearAuthorizers()
+    await this.createAuthorizers()
     await this.createRoutes()
     await this.createDeployment()
     this.serverless.cli.log(
@@ -82,7 +88,25 @@ class ServerlessWebsocketsPlugin {
         const arn = outputs.find((output) => output.OutputKey === outputKey).OutputValue
 
         // get list of route keys configured for this function
-        const routes = map((e) => e.websocket, filter((e) => e.websocket && e.websocket.routeKey, func.events))
+        const routes = map((e) => {
+          if (e.websocket.authorizer && e.websocket.authorizer.name && !this.authorizers[e.websocket.authorizer.name]) {
+            const authorizerOutputKey = this.provider.naming.getLambdaVersionOutputLogicalId(e.websocket.authorizer.name)
+            const authorizer =
+            {
+              arn: e.websocket.authorizer.arn,
+              identitySource: e.websocket.authorizer.identitySource,
+              name: e.websocket.authorizer.name
+            }
+            if (!authorizer.arn) {
+              authorizer.arn = outputs.find((output) => output.OutputKey === authorizerOutputKey).OutputValue
+            }
+            if (typeof authorizer.identitySource == 'string') {
+              authorizer.identitySource = map((identitySource) => identitySource.trim(), authorizer.identitySource.split(','))
+            }
+            this.authorizers[e.websocket.authorizer.name] = authorizer;
+          }
+          return e.websocket
+        }, filter((e) => e.websocket && e.websocket.routeKey, func.events))
 
         const fn = {
           arn: arn,
@@ -167,8 +191,12 @@ class ServerlessWebsocketsPlugin {
       RouteKey: route.routeKey,
       Target: `integrations/${integrationId}`
     }
+    if (route.authorizer && route.authorizer.name) {
+      params.AuthorizationType = 'CUSTOM'
+      params.AuthorizerId = this.authorizers[route.authorizer.name].authorizerId
+    }
     if (route.routeResponseSelectionExpression) {
-      params.RouteResponseSelectionExpression = route.routeResponseSelectionExpression;
+      params.RouteResponseSelectionExpression = route.routeResponseSelectionExpression
     }
 
     const res = await this.provider.request('ApiGatewayV2', 'createRoute', params).catch((e) => {
@@ -182,6 +210,41 @@ class ServerlessWebsocketsPlugin {
     }
 
     return res
+  }
+
+  async clearAuthorizers() {
+    const res = await this.provider.request('ApiGatewayV2', 'getAuthorizers', { ApiId: this.apiId })
+    return all(
+      map(
+        (authorizer) =>
+          this.provider.request('ApiGatewayV2', 'deleteAuthorizer', {
+            ApiId: this.apiId,
+            AuthorizerId: authorizer.AuthorizerId
+          }),
+        res.Items
+      )
+    )
+  }
+
+  async createAuthorizer(authorizer) {
+    const params = {
+      ApiId: this.apiId,
+      AuthorizerType: 'REQUEST',
+      AuthorizerUri: `arn:aws:apigateway:${this.region}:lambda:path/2015-03-31/functions/${authorizer.arn}/invocations`,
+      IdentitySource: authorizer.identitySource,
+      Name: authorizer.name
+    }
+    const res = await this.provider.request('ApiGatewayV2', 'createAuthorizer', params)
+    authorizer.authorizerId = res.AuthorizerId
+  }
+
+  async createAuthorizers() {
+    const authorizerPromises = map(async (authorizerName) => {
+        const authorizer = this.authorizers[authorizerName]
+        await this.addPermission(authorizer.arn)
+        return this.createAuthorizer(authorizer)
+    }, keys(this.authorizers))
+    await all(authorizerPromises)
   }
 
   async clearRoutes() {
@@ -199,10 +262,6 @@ class ServerlessWebsocketsPlugin {
   }
 
   async createRoutes() {
-    // We clear routes before deploying the new routes for idempotency
-    // since we lost the idempotency feature of CF
-    await this.clearRoutes()
-
     const integrationsPromises = map(async (fn) => {
       const integrationId = await this.createIntegration(fn.arn)
       await this.addPermission(fn.arn)
