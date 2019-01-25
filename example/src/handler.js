@@ -10,7 +10,7 @@ const success = {
 
 async function connectionManager(event, context) {
   // we do this so first connect EVER sets up some needed config state in db
-  // this goes away after CF support for web sockets
+  // this goes away after CloudFormation support is added for web sockets
   await wsClient._setupClient(event);
 
   if (event.requestContext.eventType === "CONNECT") {
