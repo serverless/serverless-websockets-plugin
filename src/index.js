@@ -266,10 +266,10 @@ class ServerlessWebsocketsPlugin {
     const res = await this.provider.request('ApiGatewayV2', 'getIntegrations', { ApiId: this.apiId })
     return all(
       map(
-        (route) =>
+        (integration) =>
           this.provider.request('ApiGatewayV2', 'deleteIntegration', {
             ApiId: this.apiId,
-            IntegrationId: route.RouteId
+            IntegrationId: integration.IntegrationId
           }),
         res.Items
       )
