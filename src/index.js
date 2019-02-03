@@ -64,6 +64,7 @@ class ServerlessWebsocketsPlugin {
     // since we lost the idempotency feature of CF
     await this.clearRoutes()
     await this.clearAuthorizers()
+    await this.clearIntegrations()
     await this.createAuthorizers()
     await this.createRoutes()
     await this.createDeployment()
@@ -255,6 +256,20 @@ class ServerlessWebsocketsPlugin {
           this.provider.request('ApiGatewayV2', 'deleteRoute', {
             ApiId: this.apiId,
             RouteId: route.RouteId
+          }),
+        res.Items
+      )
+    )
+  }
+
+  async clearIntegrations() {
+    const res = await this.provider.request('ApiGatewayV2', 'getIntegrations', { ApiId: this.apiId })
+    return all(
+      map(
+        (route) =>
+          this.provider.request('ApiGatewayV2', 'deleteIntegration', {
+            ApiId: this.apiId,
+            IntegrationId: route.RouteId
           }),
         res.Items
       )
