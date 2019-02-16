@@ -74,10 +74,16 @@ class ServerlessWebsocketsPlugin {
     this.serverless.cli.log(`  Websocket URL: ${this.getWebsocketUrl()}`)
   }
 
+  canNotFindOutputError(outputKey, stackName) {
+    this.serverless.cli.log(`${this.constructor.name}Error`)
+    throw new Error(`Can not find "${outputKey}" Output in "${stackName}" Stack`)
+  }
+
   async prepareFunctions() {
+    const stackName = this.provider.naming.getStackName()
     // get a list of CF outputs...
     const res = await this.provider.request('CloudFormation', 'describeStacks', {
-      StackName: this.provider.naming.getStackName()
+      StackName: stackName
     })
     const outputs = res.Stacks[0].Outputs
 
@@ -86,7 +92,13 @@ class ServerlessWebsocketsPlugin {
       if (func.events && func.events.find((event) => event.websocket)) {
         // find the arn of this function in the list of outputs...
         const outputKey = this.provider.naming.getLambdaVersionOutputLogicalId(name)
-        const arn = outputs.find((output) => output.OutputKey === outputKey).OutputValue
+        const outputFounded = outputs.find((output) => output.OutputKey === outputKey)
+
+        if (!outputFounded) {
+          this.canNotFindOutputError(outputKey, stackName)
+        }
+
+        const arn = outputFounded.OutputValue
 
         // get list of route keys configured for this function
         const routes = map((e) => {
@@ -98,8 +110,15 @@ class ServerlessWebsocketsPlugin {
               identitySource: e.websocket.authorizer.identitySource,
               name: e.websocket.authorizer.name
             }
+
             if (!authorizer.arn) {
-              authorizer.arn = outputs.find((output) => output.OutputKey === authorizerOutputKey).OutputValue
+              const authorizerOutput = outputs.find((output) => output.OutputKey === authorizerOutputKey)
+
+              if (!authorizerOutput) {
+                this.canNotFindOutputError(authorizerOutputKey, stackName)
+              }
+
+              authorizer.arn = authorizerOutput.OutputValue
             }
             if (typeof authorizer.identitySource == 'string') {
               authorizer.identitySource = map((identitySource) => identitySource.trim(), authorizer.identitySource.split(','))
