@@ -56,7 +56,7 @@ functions:
           routeKey: $disconnect
 
   # just in case we are getting weird / bad data
-  # we can react to it with a sane resposne
+  # we can react to it with a sane response
   defaultMessages:
     handler: src/handler.defaultMessage
     events:
