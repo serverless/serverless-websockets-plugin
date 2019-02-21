@@ -1,5 +1,8 @@
 # Serverless Websockets Plugin
 
+## Deprecation Notice
+This repo is now deprecated, and we are no longer maintaining it. v1.38.0 of the framework now includes built-in support for websockets. [Please check the docs for more info](https://serverless.com/framework/docs/providers/aws/events/websocket/)
+
 ## 1. Installation
 Install the plugin by adding it to your service dependencies:
 ```
